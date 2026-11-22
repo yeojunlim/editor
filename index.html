@@ -1,0 +1,204 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Editor</title>
+    <style>
+      :root {
+        --canvas: #faf9f5;
+        --ink: #141413;
+        --hair: #e6dfd8;
+        --primary: #cc785c;
+        --primary-active: #a9583e;
+        --dark: #181715;
+        --soft: #a09d96;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --canvas: #181715;
+          --ink: #faf9f5;
+          --hair: #3d3d3a;
+          --dark: #0f0e0d;
+          --soft: #a09d96;
+        }
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        height: 100vh;
+        display: flex;
+        flex-direction: column;
+        background: var(--canvas);
+        color: var(--ink);
+        font:
+          14px Inter,
+          -apple-system,
+          sans-serif;
+      }
+      header {
+        display: flex;
+        justify-content: flex-end;
+        align-items: center;
+        gap: 12px;
+        padding: 12px 24px;
+        border-bottom: 1px solid var(--hair);
+      }
+      h1 {
+        margin: 0 auto 0 0;
+        font:
+          400 22px/1.2 "Tiempos Headline",
+          Garamond,
+          "Times New Roman",
+          serif;
+        letter-spacing: -0.3px;
+        color: var(--ink);
+      }
+      button {
+        height: 40px;
+        padding: 0 20px;
+        border: 0;
+        border-radius: 8px;
+        background: var(--primary);
+        color: #fff;
+        font:
+          500 14px Inter,
+          sans-serif;
+        cursor: pointer;
+      }
+      button:hover {
+        background: var(--primary-active);
+      }
+      textarea {
+        flex: 1;
+        margin: 24px;
+        padding: 16px;
+        resize: none;
+        border: 1px solid var(--hair);
+        border-radius: 12px;
+        background: var(--canvas);
+        color: var(--ink);
+        font:
+          15px/1.6 ui-monospace,
+          monospace;
+        outline: none;
+      }
+      textarea:focus {
+        border-color: var(--primary);
+      }
+      footer {
+        display: flex;
+        gap: 16px;
+        align-items: center;
+        height: 36px;
+        padding: 0 24px;
+        background: var(--dark);
+        color: var(--soft);
+        font-size: 13px;
+      }
+      #status {
+        flex: 1;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>Editor</h1>
+      <button onclick="openFile()">📂</button>
+      <button onclick="save()">💾</button>
+    </header>
+    <textarea id="editor" spellcheck="false" placeholder=""></textarea>
+    <footer>
+      <span id="status">새 문서</span>
+      <span id="count"></span>
+    </footer>
+    <script>
+      if (!("showSaveFilePicker" in window)) {
+        alert("사용중인 브라우저가 일부 저장 기능을 지원하지 않습니다.");
+      }
+
+      const $ = (id) => document.getElementById(id);
+      const ed = $("editor"),
+        st = $("status"),
+        cnt = $("count");
+      let handle = null;
+      let dirty = false;
+
+      const show_stat = (msg, err) => {
+        st.textContent = msg;
+        st.style.color = err ? "#e8a0a0" : "";
+      };
+      const count = () =>
+        (cnt.textContent = `${ed.value.length}글자 · ${ed.value.split("\n").length}줄`);
+
+      ed.oninput = () => {
+        dirty = true;
+        count();
+        if (!handle) show_stat(`저장되지 않음`);
+        else show_stat(`저장되지 않음 · ${handle.name}`);
+      };
+
+      async function save() {
+        const text = ed.value;
+        try {
+          handle ??= await showSaveFilePicker({
+            suggestedName: "untitled.txt",
+          });
+          await handle.requestPermission({ mode: "readwrite" });
+          const w = await handle.createWritable();
+          await w.write(text);
+          await w.close();
+        } catch (e) {
+          if (e.name !== "AbortError")
+            show_stat("저장 실패: " + e.message, true);
+          return;
+        }
+        dirty = false;
+        show_stat(
+          `저장됨 · ${handle.name} · ${new Date().toLocaleTimeString("ko-KR")}`,
+        );
+      }
+
+      function load(text, name) {
+        ed.value = text;
+        dirty = false;
+        count();
+        show_stat(`불러옴 · ${name}`);
+      }
+
+      async function openFile() {
+        if (dirty && !confirm("저장하지 않은 변경이 있습니다. 계속할까요?"))
+          return;
+        try {
+          [handle] = await showOpenFilePicker({
+            types: [],
+          });
+          load(await (await handle.getFile()).text(), handle.name);
+        } catch (e) {
+          if (e.name !== "AbortError")
+            show_stat("불러오기 실패: " + e.message, true);
+        }
+      }
+
+      document.onkeydown = (e) => {
+        if (!(e.ctrlKey || e.metaKey)) return;
+        const k = e.key.toLowerCase();
+        if (["s", "o"].includes(k)) e.preventDefault();
+        if (k === "s") save();
+        if (k === "o") openFile();
+      };
+
+      onbeforeunload = (e) => {
+        if (dirty) e.preventDefault();
+      };
+
+      count();
+    </script>
+  </body>
+</html>
